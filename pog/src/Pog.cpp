@@ -30,11 +30,30 @@ static bool ball_collides_with_paddle(Ball& ball, Paddle& paddle) {
 	return ball_rect.intersects(paddle_rect);
 }
 
+static bool powerup_collides_with_paddle(PowerUp& powerup, Paddle& paddle) {
+	sf::IntRect powerup_rect;
+	powerup_rect.left = powerup.x - powerup.width / 2;
+	powerup_rect.top = powerup.y - powerup.height / 2;
+	powerup_rect.width = powerup.width;
+	powerup_rect.height = powerup.height;
+
+	sf::IntRect paddle_rect;
+	paddle_rect.left = paddle.x - paddle.width / 2;
+	paddle_rect.top = paddle.y - paddle.height / 2;
+	paddle_rect.width = paddle.width;
+	paddle_rect.height = paddle.height;
+
+	return powerup_rect.intersects(paddle_rect);
+}
+
 static void draw_paddle(sf::RenderTarget& target, Paddle& paddle) {
 	sf::RectangleShape r;
 	r.setSize(sf::Vector2f(paddle.width, paddle.height));
 	r.setPosition(paddle.x, paddle.y);
 	r.setOrigin(paddle.width / 2, paddle.height / 2);
+	if (paddle.powerup) {
+		r.setFillColor(sf::Color::Blue);
+	}
 	target.draw(r);
 }
 
@@ -87,13 +106,31 @@ void Pog::run() {
 			ball.x += ball.hsp;
 			ball.y += ball.vsp;
 
+			for (PowerUp& p : powerups) {
+				p.x += p.hsp;
+				p.y += p.vsp;
+			}
+
 			for (size_t i = 0; i < paddles.size(); i++) {
 				if (ball_collides_with_paddle(ball, paddles[i])) {
 					int dy = ball.y - paddles[i].y;
 					if (i == 0) {
 						ball.hsp = abs(ball.hsp) + BALL_ACC;
 					} else {
-						ball.hsp = -(abs(ball.hsp) + BALL_ACC);
+						if (paddles[i].powerup) {
+							ball.hsp = -abs(ball.hsp);
+							paddles[i].powerup = false;
+						} else {
+							ball.hsp = -(abs(ball.hsp) + BALL_ACC);
+						}
+						if (abs(ball.hsp) >= 4 && abs(ball.hsp) % 4 <= 1) {
+							PowerUp p;
+							p.x = GAME_W / 2;
+							p.y = rand() % GAME_H;
+							p.hsp = abs(ball.hsp) / 2;
+							p.vsp = 0;
+							powerups.push_back(p);
+						}
 					}
 					ball.vsp = dy / 5;
 					if (ball.vsp == 0) {
@@ -101,6 +138,15 @@ void Pog::run() {
 					}
 					ball.vsp += sign(ball.vsp) * (abs(ball.hsp) / 3);
 				}
+			}
+
+			for (auto it = powerups.begin(); it != powerups.end();) {
+				if (powerup_collides_with_paddle(*it, paddles[1])) {
+					paddles[1].powerup = true;
+					it = powerups.erase(it);
+					continue;
+				}
+				++it;
 			}
 
 			if (ball.y < 0 || ball.y > GAME_H) {
@@ -133,6 +179,15 @@ void Pog::run() {
 
 			draw_ball(window, ball);
 
+			for (PowerUp& p : powerups) {
+				sf::RectangleShape r;
+				r.setPosition(p.x, p.y);
+				r.setSize(sf::Vector2f(p.width, p.height));
+				r.setOrigin(p.width / 2, p.height / 2);
+				r.setFillColor(sf::Color::Blue);
+				window.draw(r);
+			}
+
 			for (int y = 0; y < GAME_H; y += 10) {
 				sf::RectangleShape r;
 				r.setSize(sf::Vector2f(5, 5));
@@ -162,4 +217,7 @@ void Pog::reset() {
 	ball.vsp = 0;
 
 	serve_timer = SERVE_TIME;
+
+	powerups.clear();
+	for (Paddle& p : paddles) p.powerup = false;
 }

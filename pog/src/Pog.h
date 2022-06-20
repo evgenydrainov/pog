@@ -17,9 +17,20 @@ struct Paddle
 	int y = 0;
 	int width = 10;
 	int height = 50;
+	bool powerup = false;
 };
 
 struct Ball
+{
+	int x = 0;
+	int y = 0;
+	int hsp = 0;
+	int vsp = 0;
+	int width = 10;
+	int height = 10;
+};
+
+struct PowerUp
 {
 	int x = 0;
 	int y = 0;
@@ -43,4 +54,5 @@ public:
 	Ball ball;
 	int serve_timer = 0;
 	int serve_dir = 1;
+	std::vector<PowerUp> powerups;
 };
