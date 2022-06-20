@@ -4,6 +4,16 @@ static int clamp(int x, int min, int max) {
 	return std::min(std::max(x, min), max);
 }
 
+static int sign(int x) {
+	if (x > 0) {
+		return 1;
+	} else if (x == 0) {
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
 static bool ball_collides_with_paddle(Ball& ball, Paddle& paddle) {
 	sf::IntRect ball_rect;
 	ball_rect.left = ball.x - ball.width / 2;
@@ -65,8 +75,9 @@ void Pog::run() {
 		float delta = time.asSeconds();
 
 		{
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) paddles[1].y -= PADDLE_SPEED;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) paddles[1].y += PADDLE_SPEED;
+			sf::Vector2i screen = sf::Mouse::getPosition(window);
+			sf::Vector2f world = window.mapPixelToCoords(screen);
+			paddles[1].y = world.y;
 
 			if (ball.y < paddles[0].y) paddles[0].y -= PADDLE_SPEED;
 			if (ball.y > paddles[0].y) paddles[0].y += PADDLE_SPEED;
@@ -80,14 +91,15 @@ void Pog::run() {
 				if (ball_collides_with_paddle(ball, paddles[i])) {
 					int dy = ball.y - paddles[i].y;
 					if (i == 0) {
-						ball.hsp = BALL_SPEED;
+						ball.hsp = abs(ball.hsp) + BALL_ACC;
 					} else {
-						ball.hsp = -BALL_SPEED;
+						ball.hsp = -(abs(ball.hsp) + BALL_ACC);
 					}
 					ball.vsp = dy / 5;
 					if (ball.vsp == 0) {
 						ball.vsp = (rand() % 2) ? 1 : -1;
 					}
+					ball.vsp += sign(ball.vsp) * (abs(ball.hsp) / 3);
 				}
 			}
 

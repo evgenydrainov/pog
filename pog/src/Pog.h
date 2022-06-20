@@ -7,9 +7,9 @@
 #define GAME_H 240
 #define PADDLE_OFFSET 20
 #define SERVE_TIME 75
-#define BALL_SPEED 3
-#define PADDLE_SPEED 3
-#define SERVE_SPEED 2
+#define BALL_ACC 1
+#define PADDLE_SPEED 5
+#define SERVE_SPEED 1
 
 struct Paddle
 {
