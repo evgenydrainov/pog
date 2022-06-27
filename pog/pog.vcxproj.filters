@@ -24,12 +24,18 @@
     <ClCompile Include="src\Pog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\EasyText.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\Pog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\EasyText.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
