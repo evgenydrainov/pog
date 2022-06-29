@@ -18,15 +18,21 @@ sf::Vector2f normalize(sf::Vector2f v) {
 	return v / length(v);
 }
 
-static void draw_rect(sf::RenderTarget& target, sf::Vector2f pos, sf::Vector2f size) {
+static void draw_rect(sf::RenderTarget& target, sf::FloatRect rect, sf::Color color) {
 	sf::RectangleShape r;
-	r.setPosition(pos);
-	r.setSize(size);
-	r.setOrigin(size / 2.0f);
+	r.setPosition(rect.getPosition());
+	r.setSize(rect.getSize());
+	r.setFillColor(color);
 	target.draw(r);
 }
 
+bool chance(int percent) {
+	return (rand() % 100) < percent;
+}
+
 void Pog::run() {
+	srand(time(nullptr));
+
 	window.create(sf::VideoMode(GAME_W, GAME_H), "pog");
 	window.setFramerateLimit(50);
 	window.setKeyRepeatEnabled(false);
@@ -53,6 +59,10 @@ void Pog::run() {
 }
 
 void Pog::update() {
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::R)) {
+		reset();
+	}
+
 	// mouse control
 	sf::Vector2i screen = sf::Mouse::getPosition(window);
 	sf::Vector2f world = window.mapPixelToCoords(screen);
@@ -60,7 +70,7 @@ void Pog::update() {
 
 	// ai
 	if (serve_timer > 0.0f) {
-		paddle[0].pos.y = approach(paddle[0].pos.y, GAME_H / 2.0f, PADDLE_SPEED);
+		paddle[0].pos.y = approach(paddle[0].pos.y, GAME_H / 2.0f, paddle[0].speed);
 	} else if (ball.vel.x < 0.0f) {
 		float limit = PADDLE_OFFSET + paddle[0].size.x / 2.0f + ball.size.x / 2.0f;
 		sf::Vector2f p = ball.pos;
@@ -76,7 +86,7 @@ void Pog::update() {
 			if (i++ > 1000) break;
 		}
 
-		paddle[0].pos.y = approach(paddle[0].pos.y, p.y, PADDLE_SPEED);
+		paddle[0].pos.y = approach(paddle[0].pos.y, p.y, paddle[0].speed);
 	}
 
 	// keep in bounds
@@ -84,15 +94,63 @@ void Pog::update() {
 		p.pos.y = clamp(p.pos.y, p.size.y / 2.0f, GAME_HF - p.size.y / 2.0f);
 	}
 
+	// move
 	ball.pos += ball.vel;
+
+	for (Powerup& p : powerups) {
+		p.pos += p.vel;
+	}
 
 	// collide
 	{
 		std::size_t i = (ball.vel.x >= 0.0f) ? 1 : 0;
 		if (ball.rect().intersects(paddle[i].rect())) {
 			sf::Vector2f delta = normalize((ball.pos - ball.vel) - paddle[i].pos);
-			float mag = length(ball.vel);
-			ball.vel = delta * (mag + BALL_ACC);
+			float mag = length(ball.vel) + BALL_ACC;
+
+			turn++;
+
+			if (turn >= 10) {
+				if (chance(50)) {
+					Powerup& p = powerups.emplace_back();
+					p.pos.x = GAME_WF / 2.0f;
+					p.pos.y = (float)(rand() % GAME_H);
+					p.vel.x = 3.0f;
+					if (chance(50)) {
+						p.type = Powerup::Type::BallSpeedDown;
+					} else {
+						p.type = Powerup::Type::OpponentSpeedDown;
+					}
+				}
+			}
+
+			if (paddle[i].powerup == Powerup::Type::BallSpeedDown) {
+				mag -= 2.0f * BALL_ACC;
+			} else if (paddle[i].powerup == Powerup::Type::OpponentSpeedDown) {
+				paddle[0].speed -= 0.25f;
+			}
+
+			paddle[i].powerup = Powerup::Type::None;
+
+			ball.vel = delta * mag;
+		}
+	}
+
+	for (auto it = powerups.begin(); it != powerups.end();) {
+		if (it->rect().intersects(paddle[1].rect())) {
+			paddle[1].powerup = it->type;
+			it = powerups.erase(it);
+		} else {
+			++it;
+		}
+	}
+
+	// destroy out of bounds
+	for (auto it = powerups.begin(); it != powerups.end();) {
+		if (it->pos.x < 0.0f || it->pos.x > GAME_WF || it->pos.y < 0.0f || it->pos.y > GAME_HF) {
+			it = powerups.erase(it);
+		} else {
+			++it;
 		}
 	}
 
@@ -124,30 +182,54 @@ void Pog::update() {
 void Pog::render() {
 	window.clear();
 	{
-		for (Paddle& p : paddle) draw_rect(window, p.pos, p.size);
-
-		draw_rect(window, ball.pos, ball.size);
-
-		for (float y = 0.0f; y < GAME_HF; y += 10.0f) {
-			draw_rect(window, sf::Vector2f(GAME_WF / 2.0f, y), sf::Vector2f(5.0f, 5.0f));
+		// objects
+		for (Paddle& p : paddle) {
+			sf::Color c = sf::Color::White;
+			if (p.powerup == Powerup::Type::BallSpeedDown) {
+				c = sf::Color::Blue;
+			} else if (p.powerup == Powerup::Type::OpponentSpeedDown) {
+				c = sf::Color::Cyan;
+			}
+			draw_rect(window, p.rect(), c);
 		}
 
-		static sf::EasyText ai_score;
-		ai_score.setPosition(GAME_WF / 4.0f, GAME_HF / 10.0f);
-		ai_score.setScale(2.0f, 2.0f);
-		ai_score.setString(std::to_string(score[0]));
-		window.draw(ai_score);
+		draw_rect(window, ball.rect(), sf::Color::White);
 
-		static sf::EasyText player_score;
-		player_score.setPosition(GAME_WF / 4.0f * 3.0f, GAME_HF / 10.0f);
-		player_score.setScale(2.0f, 2.0f);
-		player_score.setString(std::to_string(score[1]));
-		window.draw(player_score);
+		for (Powerup& p : powerups) {
+			sf::Color c = sf::Color::White;
+			if (p.type == Powerup::Type::BallSpeedDown) {
+				c = sf::Color::Blue;
+			} else if (p.type == Powerup::Type::OpponentSpeedDown) {
+				c = sf::Color::Cyan;
+			}
+			draw_rect(window, p.rect(), c);
+		}
 
-		static sf::EasyText ball_spd;
-		ball_spd.setString("BALL SPEED " + std::to_string(length(ball.vel)));
-		ball_spd.setFillColor(sf::Color::Red);
-		window.draw(ball_spd);
+		// line
+		for (float y = 0.0f; y < GAME_HF; y += 10.0f) {
+			draw_rect(window, sf::FloatRect(GAME_WF / 2.0f - 2.0f, y - 2.0f, 5.0f, 5.0f), sf::Color::White);
+		}
+
+		static sf::EasyText ball_spd_label;
+		ball_spd_label.setString(
+			"BALL SPEED " + std::to_string(length(ball.vel)) +
+			"\nTURN " + std::to_string(turn) +
+			"\nPADDLE SPEED " + std::to_string(paddle[0].speed)
+		);
+		ball_spd_label.setFillColor(sf::Color::Red);
+		window.draw(ball_spd_label);
+
+		static sf::EasyText ai_score_label;
+		ai_score_label.setPosition(GAME_WF / 4.0f, GAME_HF / 10.0f);
+		ai_score_label.setScale(2.0f, 2.0f);
+		ai_score_label.setString(std::to_string(score[0]));
+		window.draw(ai_score_label);
+
+		static sf::EasyText player_score_label;
+		player_score_label.setPosition(GAME_WF / 4.0f * 3.0f, GAME_HF / 10.0f);
+		player_score_label.setScale(2.0f, 2.0f);
+		player_score_label.setString(std::to_string(score[1]));
+		window.draw(player_score_label);
 	}
 	window.display();
 }
@@ -159,4 +241,8 @@ void Pog::reset() {
 	ball.vel = sf::Vector2f();
 
 	serve_timer = SERVE_TIME;
+	turn = 0;
+	powerups.clear();
+	paddle[1].powerup = Powerup::Type::None;
+	paddle[0].speed = PADDLE_SPEED;
 }
